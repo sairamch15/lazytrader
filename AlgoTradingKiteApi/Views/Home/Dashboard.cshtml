@@ -1,0 +1,170 @@
+﻿@model DashboardModelView
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kite WebSocket Data</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/5.0.9/signalr.min.js"></script>
+</head>
+<body>
+
+    <table id="InstrumentToken" border="1" class="table table-bordered">
+        <thead>
+            <tr>
+                <th scope="col">Symbol</th>
+                <th scope="col">Name</th>
+                <th scope="col">Instrument Token</th>
+                <th scope="col">Expiry</th>
+                <th scope="col">InstrumentType</th>
+                <th scope="col">ExchangeToken</th>
+                <th scope="col">Strick Price</th>
+                <th scope="col">LastPrice</th>
+                <th scope="col">Bench Price</th>
+                <th scope="col">Change</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var quote in Model.InstrumentList)
+            {
+                <tr>
+                    <td>@quote.tradingsymbol</td>
+
+                    <td>@quote.name</td>
+                    <td>@quote.instrument_token</td>
+                    <td>@quote.expiry</td>
+                    <td>@quote.instrument_type</td>
+                    <td>@quote.exchange_token</td>
+                    <td>@quote.strike</td>
+                    <td>@quote.last_price</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    <h1>Real-time Market Data</h1>
+    <table id="LiveData" border="1" class="table table-bordered">
+        <thead>
+            <tr>
+                <th scope="col">Instrument Token</th>
+                <th scope="col">Open</th>
+                <th scope="col">High</th>
+                <th scope="col">Low</th>
+                <th scope="col">Last Price</th>
+                <th scope="col">Bench Price</th>
+                <th scope="col">Change</th>
+                <th scope="col">Net Change</th>
+                <th scope="col">Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var quote in Model.TickList)
+            {
+                <tr>
+                    @if(@quote.Tick.InstrumentToken > 0)
+                    {
+                        <td>@quote.Tick.InstrumentToken</td>
+                        <td>@quote.Tick.Open</td>
+                        <td>@quote.Tick.High</td>
+                        <td>@quote.Tick.Low</td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <script type="text/javascript">
+        console.log(@Html.Raw(Json.Serialize(Model)));
+        // Ensure the script is loaded before using signalR
+        document.addEventListener("DOMContentLoaded", function () {
+            // Connect to SignalR Hub
+            var connection = new signalR.HubConnectionBuilder()
+                .withUrl("/marketDataHub")
+                .build();
+
+            // Receive market data from the server
+            connection.on("ReceiveMarketData", function (data) {
+                var model = @Html.Raw(Json.Serialize(Model));
+                var obj = JSON.parse(data);
+                model.curTick = obj;
+
+                $.ajax({
+                    url: '/Home/Dashboard', // The action method URL
+                    type: 'POST',
+                    contentType: 'application/json', // Specify that the data is JSON
+                    data: JSON.stringify(model), // Serialize the person object to JSON
+                    success: function (response) {
+                        model = response;
+                        var tbody = $("#InstrumentToken").find("tbody");
+                        if (tbody.length > 0) {
+                            if(tbody.find("tr").length == 0){
+                                var appendText = "";
+                                if (model != null && model.instrumentList != undefined && model.instrumentList.length > 0) {
+
+                                    for (var i = 0; i < model.instrumentList.length; i++) {
+                                        appendText = "<tr>";
+                                        appendText += "<td>" + model.instrumentList[i].tradingsymbol + "</td>";
+                                        appendText += "<td>" + model.instrumentList[i].name + "</td>";
+                                        appendText += "<td>" + model.instrumentList[i].instrument_token + "</td>";
+                                        appendText += "<td>" + model.instrumentList[i].expiry + "</td>";
+                                        appendText += "<td>" + model.instrumentList[i].instrument_type + "</td>";
+                                        appendText += "<td>" + model.instrumentList[i].exchange_token + "</td>";
+                                        appendText += "<td>" + model.instrumentList[i].strike + "</td>";
+                                        appendText += "<td>" + model.instrumentList[i].last_price + "</td>";
+                                        appendText += "</tr>";
+                                        tbody.append(appendText);
+                                    }
+                                }
+                            }
+                            
+                        }
+
+                        var tbody = $("#LiveData").find("tbody");
+                        if (tbody.length > 0) {
+                            if (tbody.find("tr").length > 0) {
+                                for (var i = 0; i < tbody.find("tr").length;i++ ){
+                                    tbody.find("tr")[i].remove();
+                                }
+
+                            }
+                                var appendText = "";
+                            if (model != null && model.tickList != undefined && model.tickList.length > 0) {
+
+                                for (var i = 0; i < model.tickList.length; i++) {
+                                        appendText = "<tr>";
+                                    appendText += "<td>" + model.tickList[i].tick.instrumentToken + "</td>";
+                                    appendText += "<td>" + model.tickList[i].tick.open + "</td>";
+                                    appendText += "<td>" + model.tickList[i].tick.high + "</td>";
+                                    appendText += "<td>" + model.tickList[i].tick.low + "</td>";
+                                    appendText += "<td>" + model.tickList[i].tick.lastPrice + "</td>";
+                                    appendText += "<td>" + model.tickList[i].benchPrice + "</td>";
+                                    appendText += "<td>" + model.tickList[i].change + "</td>";
+                                    appendText += "<td>" + model.tickList[i].netChange + "</td>";
+                                    appendText += "<td>" + model.tickList[i].status + "</td>";
+                                    
+                                        appendText += "</tr>";
+                                        tbody.append(appendText);
+                                    }
+                                
+                            }
+
+                        }
+                    },
+                    error: function (err) {
+                        // Handle any errors
+                        $('#responseMessage').text('Error updating person.');
+                        console.error(err);
+                    }
+                });
+
+                
+            });
+
+            // Start the connection
+            connection.start().catch(function (err) {
+                return console.error(err.toString());
+            });
+        });
+    </script>
+
+</body>
+</html>
